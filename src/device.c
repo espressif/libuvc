@@ -1071,40 +1071,40 @@ uvc_error_t uvc_scan_control(uvc_device_handle_t *devh, uvc_device_info_t *info)
   for (interface_idx = 0; interface_idx < info->config->bNumInterfaces; ++interface_idx) {
     if_desc = &info->config->interface[interface_idx].altsetting[0];
 
-    if ( haveTISCamera && if_desc->bInterfaceClass == 255 && if_desc->bInterfaceSubClass == 1) // Video, Control
-      break;
+    if ( haveTISCamera && if_desc->bInterfaceClass == 255 && if_desc->bInterfaceSubClass == 1) {
+      // Video, Control
+    } else if (if_desc->bInterfaceClass == 14 && if_desc->bInterfaceSubClass == 1) {
+      // Video, Control
+    } else {
+      continue;
+    }
 
-    if (if_desc->bInterfaceClass == 14 && if_desc->bInterfaceSubClass == 1) // Video, Control
-      break;
+    if (if_desc == NULL) {
+      UVC_EXIT(UVC_ERROR_INVALID_DEVICE);
+      return UVC_ERROR_INVALID_DEVICE;
+    }
 
-    if_desc = NULL;
-  }
+    info->ctrl_if.bInterfaceNumber = interface_idx;
+    if (if_desc->bNumEndpoints != 0) {
+      info->ctrl_if.bEndpointAddress = if_desc->endpoint[0].bEndpointAddress;
+    }
 
-  if (if_desc == NULL) {
-    UVC_EXIT(UVC_ERROR_INVALID_DEVICE);
-    return UVC_ERROR_INVALID_DEVICE;
-  }
+    buffer = if_desc->extra;
+    buffer_left = if_desc->extra_length;
 
-  info->ctrl_if.bInterfaceNumber = interface_idx;
-  if (if_desc->bNumEndpoints != 0) {
-    info->ctrl_if.bEndpointAddress = if_desc->endpoint[0].bEndpointAddress;
-  }
+    while (buffer_left >= 3) { // parseX needs to see buf[0,2] = length,type
+      block_size = buffer[0];
+      parse_ret = uvc_parse_vc(devh->dev, info, buffer, block_size);
 
-  buffer = if_desc->extra;
-  buffer_left = if_desc->extra_length;
-
-  while (buffer_left >= 3) { // parseX needs to see buf[0,2] = length,type
-    block_size = buffer[0];
-    parse_ret = uvc_parse_vc(devh->dev, info, buffer, block_size);
-
-    if (parse_ret != UVC_SUCCESS) {
-      ret = parse_ret;
-      break;
+      if (parse_ret != UVC_SUCCESS) {
+        ret = parse_ret;
+        break;
     }
 
     buffer_left -= block_size;
     buffer += block_size;
   }
+}
 
   UVC_EXIT(ret);
   return ret;
@@ -1143,6 +1143,7 @@ uvc_error_t uvc_parse_vc_header(uvc_device_t *dev,
     UVC_EXIT(UVC_ERROR_NOT_SUPPORTED);
     return UVC_ERROR_NOT_SUPPORTED;
   }
+
 
   for (i = 12; i < block_size; ++i) {
     scan_ret = uvc_scan_streaming(dev, info, block[i]);
@@ -1336,6 +1337,7 @@ uvc_error_t uvc_scan_streaming(uvc_device_t *dev,
   stream_if = calloc(1, sizeof(*stream_if));
   stream_if->parent = info;
   stream_if->bInterfaceNumber = if_desc->bInterfaceNumber;
+
   DL_APPEND(info->stream_ifs, stream_if);
 
   while (buffer_left >= 3) {
@@ -1844,12 +1846,12 @@ void uvc_process_control_status(uvc_device_handle_t *devh, unsigned char *data, 
                     content, content_len,
                     devh->status_user_ptr);
   }
-  
+
   UVC_EXIT_VOID();
 }
 
 void uvc_process_streaming_status(uvc_device_handle_t *devh, unsigned char *data, int len) {
-  
+
   UVC_ENTER();
 
   if (len < 3) {
@@ -1865,7 +1867,7 @@ void uvc_process_streaming_status(uvc_device_handle_t *devh, unsigned char *data
       return;
     }
     UVC_DEBUG("Button (intf %u) %s len %d\n", data[1], data[3] ? "pressed" : "released", len);
-    
+
     if(devh->button_cb) {
       UVC_DEBUG("Running user-supplied button callback");
       devh->button_cb(data[1],
@@ -1880,7 +1882,7 @@ void uvc_process_streaming_status(uvc_device_handle_t *devh, unsigned char *data
 }
 
 void uvc_process_status_xfer(uvc_device_handle_t *devh, struct libusb_transfer *transfer) {
-  
+
   UVC_ENTER();
 
   /* printf("Got transfer of aLen = %d\n", transfer->actual_length); */
